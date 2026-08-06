@@ -92,7 +92,7 @@ first thing built.
 |---|---|
 | Node agent / controller | Custom, C# / .NET, gRPC over QUIC/HTTP2 |
 | Node identity & liveness | RFC-0001 (implemented) |
-| Distributed storage | RFC-0002 (design stage) — Ceph-inspired, not a copy |
+| Distributed storage | RFC-0002 (draft posted, open for discussion) — Ceph-inspired, not a copy |
 | Virtual networking | RFC-0003 (design stage) — WireGuard-based overlay |
 | Scheduler | RFC-0004 (design stage) — resource- and reliability-aware |
 | Security model | RFC-0005 (design stage) |
