@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+option csharp_namespace = "TidsOS.Contracts.Node";
+
+package tidsos.node.v1;
+
+// NodeService is the contact point between an Agent (running on an office PC
+// or laptop) and the Controller. It is deliberately tolerant of unreliable
+// hardware: nodes are expected to disappear (sleep, shutdown, Wi-Fi drop) and
+// reappear without any special handling on either side. See RFC-0001.
+service NodeService {
+  // Register introduces a node to the cluster. Safe to call repeatedly
+  // (e.g. after a reconnect) with the same node_id — it is idempotent.
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+
+  // Heartbeat is a long-lived client-streaming call. The agent keeps it open
+  // and sends a beat on the configured interval; the controller uses gaps in
+  // this stream (not a single missed beat) to decide a node has gone away.
+  rpc Heartbeat(stream HeartbeatRequest) returns (stream HeartbeatAck);
+}
+
+enum NodeStatus {
+  NODE_STATUS_UNSPECIFIED = 0;
+  ONLINE = 1;
+  DRAINING = 2;
+}
+
+message RegisterRequest {
+  string node_id = 1;         // client-generated UUID, stable across restarts
+  string hostname = 2;
+  string os_description = 3;  // e.g. "Microsoft Windows 10.0.22631"
+  int32 cpu_cores = 4;
+  int64 total_memory_mb = 5;
+  string agent_version = 6;
+}
+
+message RegisterResponse {
+  bool accepted = 1;
+  string node_id = 2;                  // echoed back (or reassigned if collision)
+  int32 heartbeat_interval_seconds = 3; // controller dictates the cadence
+  string message = 4;
+}
+
+message HeartbeatRequest {
+  string node_id = 1;
+  int64 timestamp_unix_ms = 2;
+  double cpu_usage_percent = 3;
+  int64 memory_available_mb = 4;
+  NodeStatus status = 5;
+}
+
+message HeartbeatAck {
+  bool acknowledged = 1;
+  int64 server_time_unix_ms = 2;
+}

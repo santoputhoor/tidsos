@@ -1,0 +1,19 @@
+# .NET
+bin/
+obj/
+out/
+*.user
+*.suo
+
+# Rider / VS / VS Code
+.vs/
+.vscode/
+.idea/
+*.DotSettings.user
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Logs from local demo runs
+*.log
