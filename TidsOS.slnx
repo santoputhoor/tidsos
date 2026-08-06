@@ -4,4 +4,7 @@
     <Project Path="src/TidsOS.Contracts/TidsOS.Contracts.csproj" />
     <Project Path="src/TidsOS.Controller/TidsOS.Controller.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TidsOS.Tests/TidsOS.Tests.csproj" />
+  </Folder>
 </Solution>

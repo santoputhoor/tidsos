@@ -5,15 +5,19 @@ namespace TidsOS.Agent;
 // every time. We persist a generated id once, next to the agent's data.
 public static class NodeIdentity
 {
-    private static readonly string StatePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "tidsOS", "node-id");
-
-    public static string GetOrCreateNodeId()
+    // Env.SpecialFolder.LocalApplicationData resolves differently per OS
+    // (%LOCALAPPDATA% on Windows, XDG_DATA_HOME-derived on Linux, ~/.local/share
+    // on macOS under .NET) — the override exists so tests can point this at a
+    // temp directory instead of asserting on a real per-OS path.
+    public static string GetOrCreateNodeId(string? baseDirectory = null)
     {
-        if (File.Exists(StatePath))
+        var statePath = Path.Combine(
+            baseDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "tidsOS", "node-id");
+
+        if (File.Exists(statePath))
         {
-            var existing = File.ReadAllText(StatePath).Trim();
+            var existing = File.ReadAllText(statePath).Trim();
             if (!string.IsNullOrWhiteSpace(existing))
             {
                 return existing;
@@ -21,8 +25,8 @@ public static class NodeIdentity
         }
 
         var nodeId = Guid.NewGuid().ToString("N");
-        Directory.CreateDirectory(Path.GetDirectoryName(StatePath)!);
-        File.WriteAllText(StatePath, nodeId);
+        Directory.CreateDirectory(Path.GetDirectoryName(statePath)!);
+        File.WriteAllText(statePath, nodeId);
         return nodeId;
     }
 }

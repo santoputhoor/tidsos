@@ -43,3 +43,8 @@ app.MapGet("/nodes", (NodeRegistry registry) => registry.Snapshot().Select(n => 
 }));
 
 app.Run();
+
+// Exposed so the test project's WebApplicationFactory<Program> can host this
+// app in-process (real ASP.NET Core pipeline, no real sockets) to verify the
+// RFC-0001 wire protocol identically on every CI runner OS.
+public partial class Program;
