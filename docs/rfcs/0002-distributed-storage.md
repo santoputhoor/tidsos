@@ -2,7 +2,7 @@
 
 - Status: Draft — open for discussion
 - Author(s): tidsOS founding contributors
-- Discussion: (link once opened on GitHub Discussions)
+- Discussion: https://github.com/santoputhoor/tidsos/discussions/1
 - Depends on: [RFC-0001](0001-node-registration.md) (node identity and liveness)
 
 ## Summary
