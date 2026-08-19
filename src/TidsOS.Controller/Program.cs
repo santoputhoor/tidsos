@@ -19,13 +19,16 @@ builder.WebHost.ConfigureKestrel(options =>
 
 builder.Services.AddGrpc();
 builder.Services.AddSingleton<NodeRegistry>();
+builder.Services.AddSingleton<ChunkRegistry>();
 builder.Services.AddHostedService<StaleNodeReaper>();
+builder.Services.AddHostedService<ReplicationReconciler>();
 
 var app = builder.Build();
 
 app.MapGrpcService<NodeRegistryService>();
+app.MapGrpcService<PlacementServiceImpl>();
 
-app.MapGet("/", () => $"tidsOS controller is running. gRPC (NodeService) on port {grpcPort}, status API on port {httpPort}.");
+app.MapGet("/", () => $"tidsOS controller is running. gRPC (NodeService, PlacementService) on port {grpcPort}, status API on port {httpPort}.");
 
 app.MapGet("/nodes", (NodeRegistry registry) => registry.Snapshot().Select(n => new
 {
@@ -36,10 +39,21 @@ app.MapGet("/nodes", (NodeRegistry registry) => registry.Snapshot().Select(n => 
     n.TotalMemoryMb,
     n.AgentVersion,
     n.IsOnline,
+    n.IsPresumedLost,
+    n.ChunkStoreAddress,
     n.LastCpuUsagePercent,
     n.LastMemoryAvailableMb,
     RegisteredAt = n.RegisteredAt,
     LastHeartbeatAt = n.LastHeartbeatAt,
+}));
+
+app.MapGet("/chunks", (ChunkRegistry registry) => registry.Snapshot().Select(c => new
+{
+    c.ChunkHash,
+    c.SizeBytes,
+    ReplicaCount = c.ReplicaNodeIds.Count,
+    ReplicaNodeIds = c.ReplicaNodeIds.Keys,
+    NeedsReplication = c.ReplicaNodeIds.Count < StorageDefaults.ReplicationFactor,
 }));
 
 app.Run();

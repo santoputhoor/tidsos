@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+option csharp_namespace = "TidsOS.Contracts.Storage";
+
+package tidsos.storage.v1;
+
+// ChunkStore runs on every participating Agent (RFC-0002). It is the local,
+// single-node half of the storage layer: read and write content-addressed
+// chunks on this machine's disk. Placement — which nodes a chunk should live
+// on — is decided elsewhere, by the Controller's PlacementService.
+service ChunkStore {
+  // Idempotent: writing the same chunk_hash twice is a no-op success, since
+  // content-addressing means identical hash implies identical content.
+  rpc PutChunk(PutChunkRequest) returns (PutChunkResponse);
+
+  rpc GetChunk(GetChunkRequest) returns (GetChunkResponse);
+}
+
+message PutChunkRequest {
+  string chunk_hash = 1; // lowercase hex SHA-256 of content
+  bytes content = 2;
+}
+
+message PutChunkResponse {
+  bool accepted = 1;
+  // False only when the supplied chunk_hash doesn't match SHA-256(content) —
+  // the store never trusts the caller's hash claim.
+  bool hash_verified = 2;
+  string message = 3;
+}
+
+message GetChunkRequest {
+  string chunk_hash = 1;
+}
+
+message GetChunkResponse {
+  bool found = 1;
+  bytes content = 2;
+}

@@ -17,6 +17,8 @@
 
   <ItemGroup>
     <Protobuf Include="Protos\node.proto" GrpcServices="Both" />
+    <Protobuf Include="Protos\chunkstore.proto" GrpcServices="Both" />
+    <Protobuf Include="Protos\placement.proto" GrpcServices="Both" />
   </ItemGroup>
 
 </Project>

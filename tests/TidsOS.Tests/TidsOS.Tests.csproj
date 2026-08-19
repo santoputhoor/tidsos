@@ -21,8 +21,16 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\TidsOS.Controller\TidsOS.Controller.csproj" />
-    <ProjectReference Include="..\..\src\TidsOS.Agent\TidsOS.Agent.csproj" />
+    <!--
+      Both Agent and Controller are ASP.NET Core apps with top-level
+      statements, so each implicitly declares a public partial `Program` in
+      the global namespace for WebApplicationFactory<Program> to target.
+      Referenced together, that name collides — the standard fix is an
+      assembly alias on one side so the test project can disambiguate with
+      `extern alias`.
+    -->
+    <ProjectReference Include="..\..\src\TidsOS.Controller\TidsOS.Controller.csproj" Aliases="global,ControllerHost" />
+    <ProjectReference Include="..\..\src\TidsOS.Agent\TidsOS.Agent.csproj" Aliases="global,AgentHost" />
     <ProjectReference Include="..\..\src\TidsOS.Contracts\TidsOS.Contracts.csproj" />
   </ItemGroup>
 

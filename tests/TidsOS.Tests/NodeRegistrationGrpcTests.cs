@@ -1,3 +1,5 @@
+extern alias ControllerHost;
+
 using Grpc.Core;
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -5,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using TidsOS.Contracts.Node;
 using TidsOS.Controller.Registry;
 using Xunit;
+using ControllerProgram = ControllerHost::Program;
 
 namespace TidsOS.Tests;
 
@@ -14,28 +17,13 @@ namespace TidsOS.Tests;
 // sockets, it runs identically on Windows, Linux, and macOS in CI — the
 // Kestrel dual-port h2c setup that only real sockets need doesn't come into
 // play here.
-public class NodeRegistrationGrpcTests : IClassFixture<WebApplicationFactory<Program>>
+public class NodeRegistrationGrpcTests : IClassFixture<WebApplicationFactory<ControllerProgram>>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly WebApplicationFactory<ControllerProgram> _factory;
 
-    public NodeRegistrationGrpcTests(WebApplicationFactory<Program> factory)
+    public NodeRegistrationGrpcTests(WebApplicationFactory<ControllerProgram> factory)
     {
         _factory = factory;
-    }
-
-    // https://learn.microsoft.com/aspnet/core/grpc/test-tools — TestServer
-    // reports responses as HTTP/1.1 by default, which Grpc.Net.Client's
-    // version check rejects; this forces the response version to match
-    // what was requested.
-    private sealed class ResponseVersionHandler : DelegatingHandler
-    {
-        protected override async Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            var response = await base.SendAsync(request, cancellationToken);
-            response.Version = request.Version;
-            return response;
-        }
     }
 
     private NodeService.NodeServiceClient CreateClient()

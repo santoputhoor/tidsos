@@ -17,7 +17,8 @@ public sealed class NodeRegistryService(NodeRegistry registry, ILogger<NodeRegis
             request.OsDescription,
             request.CpuCores,
             request.TotalMemoryMb,
-            request.AgentVersion);
+            request.AgentVersion,
+            request.ChunkStoreAddress);
 
         logger.LogInformation(
             "Node registered: {NodeId} ({Hostname}, {CpuCores} cores, {MemoryMb} MB, agent {AgentVersion})",

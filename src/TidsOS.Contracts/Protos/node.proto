@@ -32,6 +32,10 @@ message RegisterRequest {
   int32 cpu_cores = 4;
   int64 total_memory_mb = 5;
   string agent_version = 6;
+  // host:port where this node's ChunkStore service (RFC-0002) is reachable.
+  // Empty if the agent isn't participating in storage. Added after RFC-0001
+  // shipped — field numbers are append-only, this is field 7 for that reason.
+  string chunk_store_address = 7;
 }
 
 message RegisterResponse {

@@ -35,17 +35,23 @@ that assumes its nodes are unreliable by default, and stays healthy anyway.
 - Not a Kubernetes competitor for data-center workloads — use Kubernetes for that.
 - Not a hypervisor. It orchestrates workloads across existing hardware;
   it borrows QEMU, containerd, and WireGuard rather than reinventing them.
-- Not ready for production. This is the earliest possible stage: one RFC
-  implemented, one demo working. See [Status](#status) below.
+- Not ready for production. This is still an early stage: two RFCs
+  implemented, both MVP-scoped. See [Status](#status) below.
 
 ## Status
 
-**Pre-alpha.** RFC-0001 (Node Registration) has a working reference
-implementation: a Controller that nodes register and heartbeat against, and
-an Agent that runs on a node, survives disconnects, and reconnects with
-backoff. That's it so far — storage, scheduling, networking, and the runtime
-are all open design work. See [`docs/rfcs/`](docs/rfcs) and the
-[roadmap](#roadmap).
+**Pre-alpha.** Two RFCs have working reference implementations:
+
+- **RFC-0001 (Node Registration):** a Controller that nodes register and
+  heartbeat against, and an Agent that survives disconnects and reconnects
+  with backoff.
+- **RFC-0002 (Distributed Storage):** content-addressed chunk storage —
+  agents host a local `ChunkStore`, the Controller decides placement and
+  tracks replicas, and a reconciler detects (but doesn't yet auto-repair)
+  under-replication when a node is presumed lost.
+
+Scheduling, networking, security, and the application runtime are all still
+open design work. See [`docs/rfcs/`](docs/rfcs) and the [roadmap](#roadmap).
 
 If you're looking for something you can run in production today, this isn't
 it yet. If you want to help design and build it, you're in the right place —
@@ -92,7 +98,7 @@ first thing built.
 |---|---|
 | Node agent / controller | Custom, C# / .NET, gRPC over QUIC/HTTP2 |
 | Node identity & liveness | RFC-0001 (implemented) |
-| Distributed storage | RFC-0002 (draft posted, open for discussion) — Ceph-inspired, not a copy |
+| Distributed storage | RFC-0002 (implemented, MVP) — Ceph-inspired, not a copy |
 | Virtual networking | RFC-0003 (design stage) — WireGuard-based overlay |
 | Scheduler | RFC-0004 (design stage) — resource- and reliability-aware |
 | Security model | RFC-0005 (design stage) |
@@ -113,8 +119,11 @@ not before.
 ```
 src/
   TidsOS.Contracts/    shared gRPC contracts (protobuf)
-  TidsOS.Controller/    the control plane nodes register and heartbeat against
-  TidsOS.Agent/         runs on every participating machine
+  TidsOS.Controller/    control plane — node registry, storage placement/metadata
+  TidsOS.Agent/         runs on every participating machine — registers, heartbeats,
+                         and hosts a local chunk store (RFC-0002)
+tests/
+  TidsOS.Tests/          unit + in-process gRPC integration tests, run cross-platform in CI
 docs/
   rfcs/                 design proposals — how tidsOS makes decisions
 ```

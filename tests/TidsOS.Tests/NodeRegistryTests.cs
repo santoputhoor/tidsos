@@ -89,10 +89,85 @@ public class NodeRegistryTests
         var registry = new NodeRegistry();
         var nodeId = NewNodeId();
         registry.Register(nodeId, "laptop-1", "Linux", 4, 8000, "1.0.0");
-        registry.MarkStale(TimeSpan.Zero); // force offline
+        registry.MarkStale(TimeSpan.Zero).ToList(); // force offline — MarkStale is lazy (yield return), must be enumerated to run
 
         registry.RecordHeartbeat(nodeId, cpuUsagePercent: 5, memoryAvailableMb: 1000);
 
         Assert.True(Assert.Single(registry.Snapshot(), n => n.NodeId == nodeId).IsOnline);
+    }
+
+    // --- RFC-0002: PresumedLost is a separate, longer-fused signal from
+    // MarkStale (RFC-0001) — a node briefly unreachable shouldn't trigger
+    // storage re-replication, only a node gone for a long time should.
+
+    [Fact]
+    public async Task Going_offline_briefly_does_not_presume_a_node_lost()
+    {
+        var registry = new NodeRegistry();
+        var nodeId = NewNodeId();
+        registry.Register(nodeId, "laptop-1", "Windows", 8, 16000, "1.0.0", "laptop-1:5280");
+        await Task.Delay(TimeSpan.FromMilliseconds(50));
+        registry.MarkStale(TimeSpan.FromMilliseconds(10)).ToList(); // offline, per RFC-0001
+
+        var presumedLost = registry.MarkPresumedLost(TimeSpan.FromHours(24)).ToList();
+
+        Assert.Empty(presumedLost);
+        Assert.False(Assert.Single(registry.Snapshot(), n => n.NodeId == nodeId).IsPresumedLost);
+    }
+
+    [Fact]
+    public async Task A_node_unreachable_past_the_threshold_is_presumed_lost_exactly_once()
+    {
+        var registry = new NodeRegistry();
+        var nodeId = NewNodeId();
+        registry.Register(nodeId, "laptop-1", "Windows", 8, 16000, "1.0.0", "laptop-1:5280");
+        await Task.Delay(TimeSpan.FromMilliseconds(50));
+
+        var firstPass = registry.MarkPresumedLost(TimeSpan.FromMilliseconds(10)).ToList();
+        Assert.Single(firstPass, n => n.NodeId == nodeId);
+        Assert.True(Assert.Single(registry.Snapshot(), n => n.NodeId == nodeId).IsPresumedLost);
+
+        var secondPass = registry.MarkPresumedLost(TimeSpan.FromMilliseconds(10)).ToList();
+        Assert.Empty(secondPass);
+    }
+
+    [Fact]
+    public async Task Re_registering_a_presumed_lost_node_clears_the_flag()
+    {
+        var registry = new NodeRegistry();
+        var nodeId = NewNodeId();
+        registry.Register(nodeId, "laptop-1", "Windows", 8, 16000, "1.0.0", "laptop-1:5280");
+        await Task.Delay(TimeSpan.FromMilliseconds(50));
+        registry.MarkPresumedLost(TimeSpan.FromMilliseconds(10)).ToList();
+        Assert.True(Assert.Single(registry.Snapshot(), n => n.NodeId == nodeId).IsPresumedLost); // sanity check it actually took effect
+
+        registry.Register(nodeId, "laptop-1", "Windows", 8, 16000, "1.0.0", "laptop-1:5280");
+
+        Assert.False(Assert.Single(registry.Snapshot(), n => n.NodeId == nodeId).IsPresumedLost);
+    }
+
+    [Fact]
+    public async Task PlaceableNodes_excludes_offline_presumed_lost_and_addressless_nodes()
+    {
+        var registry = new NodeRegistry();
+        var offlineId = NewNodeId();
+        registry.Register(offlineId, "offline", "Linux", 4, 8000, "1.0.0", "offline:5280");
+
+        // Let real time pass, then mark stale, *before* registering the
+        // nodes that should stay online — otherwise the same MarkStale call
+        // would mark all three stale, since they'd all have been registered
+        // within the same instant.
+        await Task.Delay(TimeSpan.FromMilliseconds(50));
+        registry.MarkStale(TimeSpan.FromMilliseconds(10)).ToList();
+
+        registry.Register(NewNodeId(), "has-address", "Linux", 4, 8000, "1.0.0", "has-address:5280");
+        var noAddressId = NewNodeId();
+        registry.Register(noAddressId, "no-address", "Linux", 4, 8000, "1.0.0"); // chunkStoreAddress defaults to ""
+
+        var placeable = registry.PlaceableNodes();
+
+        Assert.Single(placeable, n => n.Hostname == "has-address");
+        Assert.DoesNotContain(placeable, n => n.NodeId == noAddressId);
+        Assert.DoesNotContain(placeable, n => n.NodeId == offlineId);
     }
 }

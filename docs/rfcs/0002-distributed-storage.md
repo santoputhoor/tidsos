@@ -1,6 +1,6 @@
 # RFC-0002: Distributed Storage
 
-- Status: Draft — open for discussion
+- Status: Implemented (MVP)
 - Author(s): tidsOS founding contributors
 - Discussion: https://github.com/santoputhoor/tidsos/discussions/1
 - Depends on: [RFC-0001](0001-node-registration.md) (node identity and liveness)
@@ -15,12 +15,21 @@ primitive, built on top of the node registry from RFC-0001, with its own,
 much more conservative notion of "this node is gone" than RFC-0001 uses for
 general liveness.
 
-This RFC is a design proposal, not an implementation. Storage durability
-is the subsystem in this project where getting the design wrong is most
-expensive to discover after the fact — unlike RFC-0001, where a wrong call
-just meant a reconnect delay, a wrong call here means lost data. Per
-[CONTRIBUTING.md](../../CONTRIBUTING.md), this should be discussed before
-any of it gets built.
+This RFC was posted for discussion before any of it was built, per
+[CONTRIBUTING.md](../../CONTRIBUTING.md) — it sat open for feedback (via
+GitHub Discussions and public posts) for over a week with no responses, so
+implementation proceeded against the design as originally drafted below.
+The defaults it proposes (R=3, W=2, a 24h PresumedLost threshold, 8 MiB
+chunks) are therefore still exactly that — starting proposals, not
+community-validated numbers. See [Implementation status](#implementation-status)
+for what actually shipped versus what's still just design.
+
+Storage durability is the subsystem in this project where getting the
+design wrong is most expensive to discover after the fact — unlike
+RFC-0001, where a wrong call just meant a reconnect delay, a wrong call
+here means lost data. That's exactly why the numbers below are flagged as
+provisional rather than finalized: nothing about shipping the MVP resolves
+the open questions, it just gives them something concrete to react to.
 
 ## Motivation
 
@@ -155,6 +164,46 @@ scaled down.
   from filling someone's laptop disk. Needs a per-node configurable budget
   before this leaves demo status.
 
+## Implementation status
+
+What shipped matches the design above closely, with the gaps called out
+where they diverge:
+
+- **Wire contracts:** two gRPC services, not the single `StorageService`
+  originally sketched in Compatibility below — `ChunkStore` (unary
+  `PutChunk`/`GetChunk`, hosted by each **Agent**) and `PlacementService`
+  (`RequestPlacement`/`ConfirmWrite`/`GetChunkLocations`, hosted by the
+  **Controller**). Splitting them mirrors who actually owns each piece of
+  state, the same way `NodeService` (RFC-0001) is Controller-only.
+- **Content addressing:** SHA-256, exactly as designed. `LocalChunkStore`
+  verifies the claimed hash against the actual bytes on every write and
+  rejects a mismatch outright — it never trusts a caller's hash claim.
+- **Placement:** implemented as designed — prefers nodes not already
+  holding the chunk, falls back to any placeable node if fewer than R are
+  available (logging a warning rather than failing outright, so the MVP
+  still works on a 1-2 node dev cluster).
+- **The two-threshold liveness split:** implemented essentially as
+  proposed. `NodeRecord` now carries `IsPresumedLost` alongside RFC-0001's
+  `IsOnline`, on its own configurable threshold (`ReplicationReconciler`),
+  separate from `StaleNodeReaper`'s. Defaults are exactly the proposed
+  ones (24h) and are just as unvalidated as the day this RFC was drafted.
+- **Reconciliation — the one real gap:** `ReplicationReconciler` detects
+  a node crossing into `PresumedLost` and strikes it from every chunk it
+  held, so under-replication becomes visible immediately (fewer than R
+  entries from `GetChunkLocations`, or `needsReplication: true` on the new
+  `/chunks` status endpoint). It does **not** yet automatically copy the
+  affected chunks to new nodes to restore R — that's real agent-to-agent
+  data-transfer orchestration, and it's explicitly deferred rather than
+  half-built. Under-replicated chunks are surfaced, not silently repaired.
+- **Not built:** erasure coding, disk quotas, encryption/auth (still
+  blocked on RFC-0005), and Controller HA for the metadata — all exactly
+  as flagged below, unchanged by implementation.
+- **Test coverage:** unit tests for `ChunkRegistry`, the `PresumedLost`
+  threshold logic, and `LocalChunkStore`'s hash verification, plus
+  in-process gRPC integration tests for both `PlacementService` and
+  `ChunkStore` — run on Windows/Linux/macOS in CI the same way RFC-0001's
+  tests are.
+
 ## Alternatives considered
 
 - **Run Ceph underneath tidsOS instead of building this.** Rejected as
@@ -202,10 +251,11 @@ scaled down.
 
 ## Compatibility
 
-New addition — no existing wire protocol changes. Storage will need its
-own gRPC service (proposed `StorageService`, alongside RFC-0001's
-`NodeService`, likely in a new `TidsOS.Contracts/Protos/storage.proto`)
-once this RFC moves past Draft. `RegisterRequest` from RFC-0001 will
-likely need new fields later (advertised disk capacity, failure-domain
-hints) — that's an additive, backward-compatible protobuf change when it
-happens, not something this RFC needs to land itself.
+Landed as an additive change, as planned. Two new proto files
+(`chunkstore.proto`, `placement.proto`) alongside RFC-0001's `node.proto`,
+plus one additive field on `RegisterRequest` — `chunk_store_address`,
+field 7, appended after RFC-0001's existing 1-6 — for a node to advertise
+where its `ChunkStore` can be reached. Existing field numbers are
+untouched, so an RFC-0001-only agent still registers fine against a
+storage-aware Controller; it simply won't be selected for placement
+(`PlaceableNodes()` requires a non-empty `chunk_store_address`).

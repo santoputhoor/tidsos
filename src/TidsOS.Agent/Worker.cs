@@ -25,14 +25,25 @@ public sealed class Worker(ILogger<Worker> logger, IConfiguration configuration)
 
         var controllerAddress = configuration["TIDSOS_CONTROLLER"] ?? "http://localhost:5270";
         var nodeId = NodeIdentity.GetOrCreateNodeId();
-        logger.LogInformation("tidsOS agent starting. Node id {NodeId}, controller {Controller}", nodeId, controllerAddress);
+
+        // Best-effort "how would another node reach my ChunkStore" (RFC-0002).
+        // Auto-discovering a genuinely reachable address (NAT, multiple NICs)
+        // is real networking work — deferred to RFC-0003. For now this is
+        // explicitly configurable rather than guessed.
+        var chunkStorePort = configuration.GetValue("TIDSOS_CHUNKSTORE_PORT", 5280);
+        var chunkStoreHost = configuration["TIDSOS_CHUNKSTORE_ADVERTISE_HOST"] ?? "localhost";
+        var chunkStoreAddress = $"{chunkStoreHost}:{chunkStorePort}";
+
+        logger.LogInformation(
+            "tidsOS agent starting. Node id {NodeId}, controller {Controller}, chunk store {ChunkStoreAddress}",
+            nodeId, controllerAddress, chunkStoreAddress);
 
         var attempt = 0;
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                await RunSessionAsync(controllerAddress, nodeId, stoppingToken);
+                await RunSessionAsync(controllerAddress, nodeId, chunkStoreAddress, stoppingToken);
                 attempt = 0; // clean session end (e.g. controller cycled) — reset backoff
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
@@ -45,7 +56,7 @@ public sealed class Worker(ILogger<Worker> logger, IConfiguration configuration)
         }
     }
 
-    private async Task RunSessionAsync(string controllerAddress, string nodeId, CancellationToken stoppingToken)
+    private async Task RunSessionAsync(string controllerAddress, string nodeId, string chunkStoreAddress, CancellationToken stoppingToken)
     {
         using var channel = GrpcChannel.ForAddress(controllerAddress);
         var client = new NodeService.NodeServiceClient(channel);
@@ -58,6 +69,7 @@ public sealed class Worker(ILogger<Worker> logger, IConfiguration configuration)
             CpuCores = Environment.ProcessorCount,
             TotalMemoryMb = SystemVitals.AvailableMemoryMb(),
             AgentVersion = typeof(Worker).Assembly.GetName().Version?.ToString() ?? "0.1.0-dev",
+            ChunkStoreAddress = chunkStoreAddress,
         }, cancellationToken: stoppingToken);
 
         if (!registerResponse.Accepted)

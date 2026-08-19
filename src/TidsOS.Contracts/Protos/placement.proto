@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+option csharp_namespace = "TidsOS.Contracts.Storage";
+
+package tidsos.storage.v1;
+
+// PlacementService runs on the Controller (RFC-0002). It answers "which
+// nodes should hold this chunk" and tracks the resulting replica map — the
+// same pragmatic single-Controller starting point RFC-0001 used for node
+// identity, with the same known limitation (no HA yet; see RFC-0002 §
+// Unresolved questions).
+service PlacementService {
+  // Ask where to write a chunk before pushing bytes to any ChunkStore.
+  rpc RequestPlacement(RequestPlacementRequest) returns (RequestPlacementResponse);
+
+  // Tell the Controller which nodes actually confirmed the write, so its
+  // replica map reflects reality rather than the original plan.
+  rpc ConfirmWrite(ConfirmWriteRequest) returns (ConfirmWriteResponse);
+
+  rpc GetChunkLocations(GetChunkLocationsRequest) returns (GetChunkLocationsResponse);
+}
+
+message NodeEndpoint {
+  string node_id = 1;
+  string chunk_store_address = 2; // host:port
+}
+
+message RequestPlacementRequest {
+  string chunk_hash = 1;
+  int64 size_bytes = 2;
+}
+
+message RequestPlacementResponse {
+  repeated NodeEndpoint targets = 1;
+  int32 write_quorum = 2; // W: how many of targets must confirm for a durable write
+}
+
+message ConfirmWriteRequest {
+  string chunk_hash = 1;
+  repeated string node_ids = 2; // which of the offered targets actually got the chunk
+}
+
+message ConfirmWriteResponse {
+  bool accepted = 1;
+}
+
+message GetChunkLocationsRequest {
+  string chunk_hash = 1;
+}
+
+message GetChunkLocationsResponse {
+  repeated NodeEndpoint locations = 1;
+}
